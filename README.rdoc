@@ -36,10 +36,22 @@ Finally, start the application with:
 Conversely, stop it with:
   syrup stop
 
-== Support Application Types
+== Supported Application Types
 Syrup currently supports two types of application. Services are declared in the form
   service "<name>", "<file>"
 
 Rack applications are also supported. To run a rack application, add the following to your config.sy:
   rack "<name>", "<rack arguments>"
 Note that if your config.ru doesn't require any arguments, then the second parameter is entirely optional.
+
+== Persistent Configuration
+Often, applications need per deployment configuration. One example is configuring whether a given host is
+production or development. Whilst there are many ways to do this, Syrup adds yet another. Within a given
+account, commands like the following can be issued:
+  syrup set PROP=VALUE
+This property will be permanently stored (in ~/.syrup/props), and will be applied into the environment of
+all applications loaded through Syrup at their next start. So, for example, if your app had a line that read
+  puts RACK_ENV
+then executing
+  syrup set RACK_ENV=production
+would result in the application reporting "production" upon reaching the aforementioned line.
