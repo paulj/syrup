@@ -28,29 +28,15 @@ module Syrup
     # Informs the manager to stop all configured applications
     def stop
       # Work through each pid in the configuration directory, and kill it
-      waiting_pids = []
+      pids = []
       Dir[File.join(@config_dir, '*.pid')].each do |pid_f|
         pid = IO.read(pid_f).to_i rescue nil
         FileUtils.rm pid_f
-        pid && Process.kill("TERM", pid) && waiting_pids << pid rescue puts "WARNING: Failed to kill #{pid}"
+        pids << pid
       end
       
       # Wait for the process to die
-      (1..20).each do
-        waiting_pids.each do |pid|
-          running = (not Process.getpgid(pid).nil?) rescue false
-          waiting_pids.delete pid unless running
-        end
-        
-        break if waiting_pids.empty?
-        STDERR.write "."
-        sleep 0.5
-      end
-      
-      # Write a newline to clear the '.'s
-      STDERR.write "\n"
-      
-      puts "WARNING: Process(es) #{waiting_pids.inspect} did not terminate" unless waiting_pids.empty?
+      kill_pids pids
     end
     
     # Informs the manager to activate the given path
@@ -145,6 +131,38 @@ module Syrup
         current = if File.file? props_fn then YAML.load_file(props_fn) else {} end
         current ||= {}
       end
+      
+      def kill_pids(pids)
+        # List of pids waiting at each round
+        waiting_pids = []
+        
+        (1..5).each do
+          waiting_pids = []
+          pids.each do |pid|
+            pid && Process.kill("TERM", pid) && waiting_pids << pid rescue puts "WARNING: Failed to kill #{pid}"
+          end
+        
+          # Wait for the process to die
+          (1..20).each do
+            waiting_pids.each do |pid|
+              running = (not Process.getpgid(pid).nil?) rescue false
+              waiting_pids.delete pid unless running
+            end
+
+            break if waiting_pids.empty?
+            STDERR.write "."
+            sleep 0.5
+          end
+          
+          break if waiting_pids.empty?
+          pids.replace waiting_pids
+        end
+
+        # Write a newline to clear the '.'s
+        STDERR.write "\n"
+
+        puts "WARNING: Process(es) #{waiting_pids.inspect} did not terminate" unless waiting_pids.empty?
+      end
   end
   
   # Builder class used to activate the applications
@@ -190,7 +208,7 @@ module Syrup
             Dir.chdir @working_dir
             File.umask 0000
             STDIN.reopen "/dev/null"
-            STDOUT.reopen "/dev/null", "a"
+            STDOUT.reopen "logs/out.txt", "a"
             STDERR.reopen STDOUT
             trap("TERM") {exit}
             yield block
