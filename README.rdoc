@@ -1,0 +1,45 @@
+= Syrup - Service Management
+Syrup provides mechanism for managing your application daemons. Instead of needing
+to manually background processes (such as queue workers), you just configure
+a config.sy file, and then start and stop it.
+
+== Getting Started
+Syrup assumes that you'll deploy one application group per user account. You can
+run more if you want to, but Syrup makes it a lot easier if you don't...
+
+Firstly, download and install syrup
+  git clone git://github.com/vuderacha/syrup.git
+  cd syrup
+  rake install
+
+Assuming you have a simple application such as:
+  # test_service.rb
+  while true
+    File.open('/tmp/test.txt', 'a') {|f| f << "a\n"}
+    sleep 2
+
+Create a configuration file for Syrup to run it:
+  # config.sy
+  service 'myservice', 'test-service.rb'
+
+For Syrup to use an application, you need to "activate" it. This informs Syrup about the
+path of the application, and allows it to automatically start the app again later when you
+may not be around to tell it about it! Assuming that you've put your app into /home/syruptest/app,
+then you'll just issue the command:
+  syrup activate /home/syruptest/app
+
+This will create a file called "activated" in /home/syruptest/.syrup containing the path to this app.
+
+Finally, start the application with:
+  syrup start
+
+Conversely, stop it with:
+  syrup stop
+
+== Support Application Types
+Syrup currently supports two types of application. Services are declared in the form
+  service "<name>", "<file>"
+
+Rack applications are also supported. To run a rack application, add the following to your config.sy:
+  rack "<name>", "<rack arguments>"
+Note that if your config.ru doesn't require any arguments, then the second parameter is entirely optional.

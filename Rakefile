@@ -52,7 +52,7 @@ spec = Gem::Specification.new do |s|
 	s.platform = Gem::Platform::RUBY
 	s.has_rdoc = true
 	
-	s.files = %w(Rakefile) + Dir.glob("{bin,lib,spec}/**/*")
+	s.files = %w(Rakefile README.rdoc) + Dir.glob("{bin,lib,spec}/**/*")
 	
 	s.require_path = "lib"
 	s.bindir = "bin"
@@ -86,7 +86,7 @@ Rake::RDocTask.new do |t|
 	t.title    = "Syrup -- Process Manager"
 	t.options << '--line-numbers' << '--inline-source' << '-A cattr_accessor=object'
 	t.options << '--charset' << 'utf-8'
-	t.rdoc_files.include('README')
+	t.rdoc_files.include('README.rdoc')
 	t.rdoc_files.include('lib/syrup/*.rb')
 end
 
