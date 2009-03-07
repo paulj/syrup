@@ -1,3 +1,5 @@
+require 'yaml'
+
 module Syrup
   # Manager for controlling the Syrup functionality
   class Manager
@@ -88,9 +90,30 @@ module Syrup
       end
     end
     
+    # Requests that the manager store the given variables as persistent configuration that will be
+    # restored when applications are started
+    def set(props)
+      current = load_stored_properties
+      props.each do |pair|
+        k,v = pair.split('=')
+        if k.nil? or v.nil?
+          puts "ERROR: Invalid set command. #{pair} not in the form K=V"
+          return false
+        end
+        
+        current[k] = v
+      end
+      
+      File.open(props_fn, 'w') {|f| f << current.to_yaml}
+    end
+    
     private
       def activated_fn
         File.join @config_dir, 'activated'
+      end
+      
+      def props_fn
+        File.join @config_dir, 'props'
       end
       
       def get_application_config(path)
@@ -104,12 +127,23 @@ module Syrup
       end
       
       def execute_config working_dir, config_fn, args = {}
+        # Apply any stored configuration value
+        props = load_stored_properties
+        props.each do |k,v|
+          Kernel.const_set k, v
+        end
+        
         # Execute the application
         config_content = File.read config_fn
         builder = Syrup::Builder.new working_dir, @config_dir, args
         builder.instance_eval config_content
         
         builder
+      end
+      
+      def load_stored_properties
+        current = if File.file? props_fn then YAML.load_file(props_fn) else {} end
+        current ||= {}
       end
   end
   
@@ -147,7 +181,7 @@ module Syrup
         pid = fork do
           if not @double_fork
             Dir.chdir @working_dir
-            #trap("TERM") {exit}
+            trap("TERM") {exit}
             yield block
           else 
             Process.setsid

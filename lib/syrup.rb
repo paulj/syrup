@@ -48,6 +48,9 @@ module Syrup
         when 'run'
           fail("No path given to run!") if command_args.length < 1
           manager.run command_args[0]
+        when 'set'
+          fail("No properties provided to set") if command_args.length < 1
+          manager.set command_args
         else
           fail("Unrecognised command \"#{command}\"")
       end
@@ -55,7 +58,7 @@ module Syrup
     
     def build_options
       opts = OptionParser.new
-      opts.banner = "Usage: syrup [options] start | stop | run <path> | activate <path>"
+      opts.banner = "Usage: syrup [options] start | stop | run <path> | activate <path> | set <param>=<value>"
       opts.separator ""
       opts.separator "Ruby options:"
       opts.on('-d', '--debug', 'set debugging flags (set $DEBUG to true)') { $DEBUG = true }
@@ -89,11 +92,7 @@ module Syrup
       # after it as arguments to the command
       arguments.each do |arg|
         if command.nil?
-          if arg =~ /^(\w+)=(.*)$/
-            ENV[$1] = $2
-          else
-            command = arg unless arg =~ /^-/
-          end
+          command = arg unless arg =~ /^-/
         else
           command_args << arg
         end
