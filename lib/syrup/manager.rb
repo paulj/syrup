@@ -208,7 +208,7 @@ module Syrup
             Dir.chdir @working_dir
             File.umask 0000
             STDIN.reopen "/dev/null"
-            STDOUT.reopen "log/out.txt", "a"
+            STDOUT.reopen "log/#{name}.txt", "a"
             STDERR.reopen STDOUT
             trap("TERM") {exit}
             yield block
