@@ -16,6 +16,7 @@ module Syrup
       @options = OpenStruct.new
       @options.directory = File.expand_path('~/.syrup')
       @options.verbose = false
+      @options.profile = "default"
       
       # Parse the options
       @opts = build_options
@@ -30,7 +31,7 @@ module Syrup
       FileUtils.mkdir_p @options.directory if not File.directory? @options.directory
       
       # Create a manager instance
-      manager = Syrup::Manager.new @options.directory
+      manager = Syrup::Manager.new @options.directory, @options.profile
       
       # Handle the command
       daemon = Syrup::Daemon.new @options.directory, manager
@@ -73,6 +74,9 @@ module Syrup
       opts.separator "Syrup options:"
       opts.on('-p', '--path PATH', "Sets the base path for this syrup configuration. Defaults to ~/.syrup") { |value| 
         @options.directory = value
+      }
+      opts.on('--profile NAME', "Selects the profile that should be updated. Defaults to 'default'") { |value|
+        @options.profile = value
       }
       
       opts.separator ""

@@ -3,8 +3,9 @@ require 'yaml'
 module Syrup
   # Manager for controlling the Syrup functionality
   class Manager
-    def initialize(config_dir)
+    def initialize(config_dir, profile)
       @config_dir = config_dir
+      @profile = profile
     end
     
     # Informs the manager to start the configured application
@@ -95,11 +96,11 @@ module Syrup
     
     private
       def activated_fn
-        File.join @config_dir, 'activated'
+        File.join @config_dir, "#{@profile}.activated"
       end
       
       def props_fn
-        File.join @config_dir, 'props'
+        File.join @config_dir, "#{@profile}.props"
       end
       
       def get_application_config(path)
