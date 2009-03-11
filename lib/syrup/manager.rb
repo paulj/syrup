@@ -65,9 +65,7 @@ module Syrup
       
       # Register an at_exit handler to kill off all the pids
       at_exit do
-        builder.pids.each do |pid|
-          pid && Process.kill("TERM", pid) rescue puts "WARNING: Failed to kill #{pid}"
-        end
+        kill_pids builder.pids
       end
       
       # Wait for all children to die
@@ -94,6 +92,12 @@ module Syrup
       File.open(props_fn, 'w') {|f| f << current.to_yaml}
     end
     
+    # Requests that the manager load the given fabric for applications within the current profile
+    def weave(fabric)
+      # Update the fabric file name
+      File.open(fabric_fn, 'w'){ |f| f.write(File.expand_path(fabric)) }
+    end
+    
     private
       def activated_fn
         File.join @config_dir, "#{@profile}.activated"
@@ -101,6 +105,10 @@ module Syrup
       
       def props_fn
         File.join @config_dir, "#{@profile}.props"
+      end
+      
+      def fabric_fn
+        File.join @config_dir, "#{@profile}.fabric"
       end
       
       def get_application_config(path)
