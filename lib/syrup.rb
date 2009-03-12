@@ -47,11 +47,18 @@ module Syrup
           fail "No path given to activate!" if command_args.length < 1
           manager.activate command_args[0]
         when 'run'
-          fail("No path given to run!") if command_args.length < 1
-          manager.run command_args[0]
+          # Provide the command line if provided
+          if command_args.length < 1
+            manager.run
+          else
+            manager.run command_args[0]
+          end
         when 'set'
           fail("No properties provided to set") if command_args.length < 1
           manager.set command_args
+        when 'weave'
+          fail("No fabric provided to weave") if command_args.length < 1
+          manager.weave @command_args[0]
         else
           fail("Unrecognised command \"#{command}\"")
       end
@@ -72,8 +79,11 @@ module Syrup
       
       opts.separator ""
       opts.separator "Syrup options:"
-      opts.on('-p', '--path PATH', "Sets the base path for this syrup configuration. Defaults to ~/.syrup") { |value| 
+      opts.on('-p', '--path PATH', "Sets the base path for this syrup configuration. Defaults to ~/.syrup. See also the --local option to set this") { |value| 
         @options.directory = value
+      }
+      opts.on('--local', "Sets the configuration base path to ./.syrup, allowing for a local configuration") {
+        @options.directory = File.expand_path('./.syrup')
       }
       opts.on('--profile NAME', "Selects the profile that should be updated. Defaults to 'default'") { |value|
         @options.profile = value

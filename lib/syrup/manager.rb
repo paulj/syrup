@@ -55,13 +55,19 @@ module Syrup
     end
     
     # Informs the manager to run the given path in the foreground, as if it were an activated path
-    def run path
-      # Find the configuration file
-      config = get_application_config path
-      return false if config.nil?
+    def run path = nil
+      # Use the activated path if the provided one is nil
+      if path.nil?
+        config = get_application_config(File.read(activated_fn))
+        return false if config.nil?
+      else
+        # Find the configuration file
+        config = get_application_config path
+        return false if config.nil?
+      end
       
       # Execute the configuration
-      builder = execute_config path, config, :double_fork => false
+      builder = execute_config File.dirname(config), config, :double_fork => false
       
       # Register an at_exit handler to kill off all the pids
       at_exit do
@@ -126,6 +132,12 @@ module Syrup
         props = load_stored_properties
         props.each do |k,v|
           Kernel.const_set k, v
+        end
+        
+        # Load the fabric
+        if File.file? fabric_fn
+          fabric_file = File.read fabric_fn
+          require fabric_file
         end
         
         # Execute the application
