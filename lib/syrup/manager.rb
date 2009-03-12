@@ -3,9 +3,10 @@ require 'yaml'
 module Syrup
   # Manager for controlling the Syrup functionality
   class Manager
-    def initialize(config_dir, profile)
+    def initialize(config_dir, profile, verbose)
       @config_dir = config_dir
       @profile = profile
+      @verbose = verbose
     end
     
     # Informs the manager to start the configured application
@@ -128,15 +129,19 @@ module Syrup
       end
       
       def execute_config working_dir, config_fn, args = {}
+        puts "DEBUG: Loading configuration #{config_fn}" if @verbose
+        
         # Apply any stored configuration value
         props = load_stored_properties
         props.each do |k,v|
+          put "DEBUG: Applying constant #{k}=#{v}" if @verbose
           Kernel.const_set k, v
         end
         
         # Load the fabric
         if File.file? fabric_fn
           fabric_file = File.read fabric_fn
+          puts "DEBUG: Applying fabric #{fabric_file}"
           require fabric_file
         end
         

@@ -27,11 +27,11 @@ module Syrup
       fail "No command given" if command.nil?
       
       # Ensure that the configured directory exists
-      puts "INFO: Configured directory as #{@options.directory}" if $DEBUG
+      puts "INFO: Configured directory as #{@options.directory}" if @options.verbose
       FileUtils.mkdir_p @options.directory if not File.directory? @options.directory
       
       # Create a manager instance
-      manager = Syrup::Manager.new @options.directory, @options.profile
+      manager = Syrup::Manager.new @options.directory, @options.profile, @options.verbose
       
       # Handle the command
       daemon = Syrup::Daemon.new @options.directory, manager
@@ -87,6 +87,9 @@ module Syrup
       }
       opts.on('--profile NAME', "Selects the profile that should be updated. Defaults to 'default'") { |value|
         @options.profile = value
+      }
+      opts.on('--verbose', "Places Syrup in verbose mode.") {
+        @options.verbose = true
       }
       
       opts.separator ""
