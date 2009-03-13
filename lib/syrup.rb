@@ -56,9 +56,16 @@ module Syrup
         when 'set'
           fail("No properties provided to set") if command_args.length < 1
           manager.set command_args
+        when 'unset'
+          fail("No properties provided to unset") if command_args.length < 1
+          manager.unset command_args
+        when 'clear'
+          manager.clear
         when 'weave'
           fail("No fabric provided to weave") if command_args.length < 1
-          manager.weave @command_args[0]
+          manager.weave command_args[0]
+        when 'unweave'
+          manager.unweave
         else
           fail("Unrecognised command \"#{command}\"")
       end
@@ -66,7 +73,8 @@ module Syrup
     
     def build_options
       opts = OptionParser.new
-      opts.banner = "Usage: syrup [options] start | stop | run <path> | activate <path> | set <param>=<value>"
+      opts.banner = "Usage: syrup [options] start | stop | run <path> | activate <path> | set <prop>=<value> |\n" +
+                    "                       unset <prop> | clear | weave <fabric> | unweave"
       opts.separator ""
       opts.separator "Ruby options:"
       opts.on('-d', '--debug', 'set debugging flags (set $DEBUG to true)') { $DEBUG = true }

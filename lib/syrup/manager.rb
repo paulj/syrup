@@ -99,10 +99,31 @@ module Syrup
       File.open(props_fn, 'w') {|f| f << current.to_yaml}
     end
     
+    # Requests that the manager remove the given keys from the stored properties
+    def unset(props)
+      current = load_stored_properties
+      props.each do |prop|
+        current.delete prop
+      end
+      
+      File.open(props_fn, 'w') {|f| f << current.to_yaml}
+    end
+    
+    # Removes all stored properties for the current profile
+    def clear
+      File.delete props_fn
+    end
+    
     # Requests that the manager load the given fabric for applications within the current profile
     def weave(fabric)
       # Update the fabric file name
       File.open(fabric_fn, 'w'){ |f| f.write(File.expand_path(fabric)) }
+    end
+    
+    # Requests that the manager stop loading any custom fabric for the current profile, and instead
+    # load the default fabric
+    def unweave
+      File.delete(fabric_fn)
     end
     
     private
@@ -138,17 +159,22 @@ module Syrup
           Kernel.const_set k, v
         end
         
+        # Load the application config
+        config_content = File.read config_fn
+        builder = Syrup::Builder.new working_dir, @config_dir, args
+        
         # Load the fabric
         if File.file? fabric_fn
           fabric_file = File.read fabric_fn
-          puts "DEBUG: Applying fabric #{fabric_file}"
-          require fabric_file
+          puts "DEBUG: Applying fabric #{fabric_file}" if @verbose
+        else
+          fabric_file = File.join File.dirname(__FILE__), 'fabrics', 'default.rb'
+          puts "DEBUG: Applying default fabric"
         end
+        builder.instance_eval File.read(fabric_file), fabric_file
         
-        # Execute the application
-        config_content = File.read config_fn
-        builder = Syrup::Builder.new working_dir, @config_dir, args
-        builder.instance_eval config_content
+        # Execute the application configuration script
+        builder.instance_eval config_content, config_fn
         
         builder
       end
@@ -195,29 +221,33 @@ module Syrup
   class Builder 
     attr_reader :pids
     
+    def self.instance
+      @@instance
+    end
+    
     def initialize(working_dir, config_dir, args)
       @working_dir = working_dir
       @config_dir = config_dir
       @double_fork = if args[:double_fork].nil? then true else args[:double_fork] end
       @pids = []
+      
+      # Record the current instance
+      @@instance = self
     end
     
-    # Executes a rack based application
-    def rack(name, command = "")
-      in_fork(name) do
-        require 'rubygems'
-        require 'rack'
-        ARGV.replace(command.split(' '))
-        load 'rackup'
-      end
+    # Defines an application type that can be declared in a config.sy file.
+    def define_application_type(name, &block)
+      raise "No block provided for application type" unless block_given?
+      
+      # Define a method with the given name in our class
+      metaclass = class << self; self; end
+      metaclass.send(:define_method, name, &block)
     end
-
-    # Executes a service based application
-    def service(name, app, *args)
-      in_fork (name) do
-        # Execute the service app
-        load app
-      end
+    
+    def define(&block)
+      raise "No block provided" unless block_given?
+      
+      instance_eval(&block)
     end
     
     private
