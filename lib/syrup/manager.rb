@@ -169,7 +169,7 @@ module Syrup
           puts "DEBUG: Applying fabric #{fabric_file}" if @verbose
         else
           fabric_file = File.join File.dirname(__FILE__), 'fabrics', 'default.rb'
-          puts "DEBUG: Applying default fabric"
+          puts "DEBUG: Applying default fabric" if @verbose
         end
         builder.instance_eval File.read(fabric_file), fabric_file
         
