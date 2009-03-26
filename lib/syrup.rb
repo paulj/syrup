@@ -8,7 +8,10 @@ module Syrup
   # delegation to the appropriate control classes.
   class Application
     def self.version
-      "0.0.1"
+      # Load the version from the VERSION.yml file
+      version = YAML::load_file(File.join(File.dirname(__FILE__), '..', 'VERSION.yml'))
+      
+      "#{version[:major]}.#{version[:minor]}.#{version[:patch]}"
     end
     
     def run(arguments)
