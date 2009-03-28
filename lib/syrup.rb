@@ -3,6 +3,7 @@ require 'ostruct'
 require 'syrup/daemon'
 require 'syrup/manager'
 require 'syrup/runner'
+require 'syrup/fabric_support'
 
 module Syrup
   # The main application class for Syrup. Handles parsing of command line arguments, configuration, and

@@ -12,7 +12,7 @@ Gem::Specification.new do |s|
   s.email = %q{pauljones23@gmail.com}
   s.executables = ["syrup"]
   s.extra_rdoc_files = ["README.rdoc"]
-  s.files = ["Rakefile", "README.rdoc", "VERSION.yml", "bin/syrup", "lib/launcher.rb", "lib/syrup", "lib/syrup/config_store.rb", "lib/syrup/daemon.rb", "lib/syrup/executor.rb", "lib/syrup/fabrics", "lib/syrup/fabrics/default.rb", "lib/syrup/manager.rb", "lib/syrup/runner.rb", "lib/syrup.rb", "spec/syrup", "spec/syrup/config_store_spec.rb", "spec/syrup/runner_spec.rb", "spec/syrup_spec.rb"]
+  s.files = ["Rakefile", "README.rdoc", "VERSION.yml", "bin/syrup", "lib/launcher.rb", "lib/syrup", "lib/syrup/config_store.rb", "lib/syrup/daemon.rb", "lib/syrup/executor.rb", "lib/syrup/fabric_support.rb", "lib/syrup/fabrics", "lib/syrup/fabrics/default.rb", "lib/syrup/fabrics/rack.rb", "lib/syrup/manager.rb", "lib/syrup/runner.rb", "lib/syrup.rb", "spec/syrup", "spec/syrup/config_store_spec.rb", "spec/syrup/runner_spec.rb", "spec/syrup_spec.rb"]
   s.has_rdoc = true
   s.homepage = %q{http://github.com/vuderacha/syrup/}
   s.rdoc_options = ["--inline-source", "--charset=UTF-8"]
