@@ -1,187 +1,221 @@
+require 'syrup/config_store'
 require 'yaml'
 
 module Syrup
   # Manager for controlling the Syrup functionality
   class Manager
-    def initialize(config_dir, profile, verbose)
+    def initialize(config_dir, logger, verbose)
       @config_dir = config_dir
-      @profile = profile
+      @logger = logger
       @verbose = verbose
+      
+      @config_store = Syrup::ConfigStore.new @config_dir
+      @runner = Syrup::Runner.new @config_store, @logger
     end
     
-    # Informs the manager to start the configured application
-    def start
-      # Test that we have an activated configuration
-      if not File.file? activated_fn 
-        puts 'WARNING: No Application activated yet. Nothing to do!'
+    # Informs the manager to start all configured applications
+    def start_all
+      if @config_store.applications.length == 0
+        @logger.warn 'No Applications activated yet. Nothing to do!'
         return true
       end
       
-      # Load the path of the configured app from the 'activated' file
-      config = get_application_config File.read(activated_fn)
-      return false if config.nil?
+      @config_store.applications.each do |app_name, app|
+        start(app_name)
+      end
+    end
+    
+    # Informs the manager to start the specified application
+    def start(app_name)
+      # Retrieve the details of the application to check that it is valid
+      app = get_application(app_name, false)
+      return false if app.nil?
       
-      # Execute the application
-      execute_config File.dirname(config), config
+      fork do
+        Process.setsid
+        exit if fork
+        
+        # Record our PID
+        app.pid = Process.pid
+        
+        #Dir.chdir @working_dir
+        File.umask 0000
+        STDIN.reopen "/dev/null"
+        STDOUT.reopen "log/#{app_name}.txt", "a"
+        STDERR.reopen STDOUT
+        trap("TERM") {exit}
+        
+        at_exit do
+          # Release our pid
+          app.pid = nil
+        end
+        
+        # Run the application
+        run_app(app_name)
+      end
       
       return true
     end
     
     # Informs the manager to stop all configured applications
-    def stop
-      # Work through each pid in the configuration directory, and kill it
-      pids = []
-      Dir[File.join(@config_dir, '*.pid')].each do |pid_f|
-        pid = IO.read(pid_f).to_i rescue nil
-        FileUtils.rm pid_f
-        pids << pid
+    def stop_all
+      if @config_store.applications.length == 0
+        @logger.warn 'No Applications activated yet. Nothing to do!'
+        return true
       end
       
-      # Wait for the process to die
+      stop(@config_store.applications.keys)
+    end
+    
+    # Informs the manager to stop the named applications
+    def stop(app_names)
+      pids = []
+      @config_store.applications.each do |app_name, app|
+        pids << app.pid if app_names.include? app_name and not app.pid.nil? 
+      end
+      
       kill_pids pids
     end
     
     # Informs the manager to activate the given path
-    def activate path
-      # Test the path
-      config = get_application_config path
-      if config.nil?
-        return false
-      end
+    def activate name, path, args
+      # Retrieve ourselves an application object
+      app = @config_store.applications[name]
+      app = @config_store.create_application(name) if app.nil?
       
-      # Update the activated file name
-      File.open(activated_fn, 'w'){ |f| f.write(File.expand_path(path)) }
+      # Store the path to the application
+      app.app = File.expand_path(path)
+      app.start_parameters = args
       
       true
     end
     
-    # Informs the manager to run the given path in the foreground, as if it were an activated path
-    def run path = nil
-      # Use the activated path if the provided one is nil
-      if path.nil?
-        config = get_application_config(File.read(activated_fn))
-        return false if config.nil?
-      else
-        # Find the configuration file
-        config = get_application_config path
-        return false if config.nil?
+    # Informs the manager to run the given application in the foreground
+    def run(names)
+      # Create sub-processes for each of the named applications
+      pids = []
+      names.each do |name|
+        pids << fork do
+          run_app(name)
+        end
       end
-      
-      # Execute the configuration
-      builder = execute_config File.dirname(config), config, :double_fork => false
       
       # Register an at_exit handler to kill off all the pids
       at_exit do
-        kill_pids builder.pids
+        kill_pids pids
       end
       
       # Wait for all children to die
       Process.waitall.each do |pid, status|
         # We won't need to kill the processes that successfully exited
-        builder.pids.delete pid if status.exited?
+        pids.delete pid if status.exited?
+      end
+    end
+    
+    # Informs the manager to run the given application within the current process
+    def run_app(name)
+      @runner.run(name)
+    end
+    
+    # Requests that the manager store the given variables as persistent configuration for the given application.
+    def set_app_properties(app_name, properties)
+      app = @config_store.applications[app_name]
+      if app.nil?
+        @logger.error "Unknown Application. Cannot set properties."
+        return false
+      end
+      
+      props.each do |pair|
+        k,v = pair.split('=')
+        if k.nil? or v.nil?
+          @logger.error "Invalid set command. #{pair} not in the form K=V"
+          return false
+        end
+        
+        app.properties[k] = v
       end
     end
     
     # Requests that the manager store the given variables as persistent configuration that will be
-    # restored when applications are started
-    def set(props)
-      current = load_stored_properties
+    # restored when all applications are started
+    def set_global_properties(props)
       props.each do |pair|
         k,v = pair.split('=')
         if k.nil? or v.nil?
-          puts "ERROR: Invalid set command. #{pair} not in the form K=V"
+          @logger.error "Invalid set command. #{pair} not in the form K=V"
           return false
         end
         
-        current[k] = v
+        @config_store.properties[k] = v
+      end
+    end
+        
+    # Requests that the manager remove the given keys from the stored properties for the given app.
+    def unset_app_properties(app_name, props)
+      app = @config_store.applications[app_name]
+      if app.nil?
+        @logger.error "Unknown Application. Cannot unset properties."
+        return false
       end
       
-      File.open(props_fn, 'w') {|f| f << current.to_yaml}
+      props.each do |prop|
+        app.properties.delete prop
+      end
     end
     
     # Requests that the manager remove the given keys from the stored properties
-    def unset(props)
-      current = load_stored_properties
+    def unset_global_properties(props)
       props.each do |prop|
-        current.delete prop
+        @config_store.properties.delete prop
       end
+    end
+        
+    # Removes all stored properties for the current profile
+    def clear_app_properties
+      app = @config_store.applications[app_name]
+      return true if app.nil?
       
-      File.open(props_fn, 'w') {|f| f << current.to_yaml}
+      app.properties.clear
     end
     
     # Removes all stored properties for the current profile
-    def clear
-      File.delete props_fn
+    def clear_global_properties
+      @config_store.properties.clear
     end
-    
+
     # Requests that the manager load the given fabric for applications within the current profile
-    def weave(fabric)
-      # Update the fabric file name
-      File.open(fabric_fn, 'w'){ |f| f.write(File.expand_path(fabric)) }
+    def weave_global(fabric)
+      @config_store.fabric = fabric
     end
     
-    # Requests that the manager stop loading any custom fabric for the current profile, and instead
-    # load the default fabric
-    def unweave
-      File.delete(fabric_fn)
+    def unweave_global
+      @config_store.fabric = nil
+    end
+    
+    def weave_for_application(app_name, fabric)
+      app = get_application(app_name, false)
+      return false if app.nil?
+      
+      app.fabric = fabric
+    end
+    
+    def unweave_for_application(app_name)
+      app = get_application(app_name, false)
+      return false if app.nil?
+      
+      app.fabric = nil
     end
     
     private
-      def activated_fn
-        File.join @config_dir, "#{@profile}.activated"
-      end
-      
-      def props_fn
-        File.join @config_dir, "#{@profile}.props"
-      end
-      
-      def fabric_fn
-        File.join @config_dir, "#{@profile}.fabric"
-      end
-      
-      def get_application_config(path)
-        config = File.join path, 'config.sy'
-        if not File.file? config
-          puts "ERROR: #{config} does not exist!"
-          return nil
+      def get_application(app_name, create_if_missing)
+        app = @config_store.applications[app_name]
+        app = @config_store.create_application(app_name) if create_if_missing and app.nil?
+        
+        if app.nil?
+          @logger.error "Unknown Application #{app_name}"
         end
         
-        config
-      end
-      
-      def execute_config working_dir, config_fn, args = {}
-        puts "DEBUG: Loading configuration #{config_fn}" if @verbose
-        
-        # Apply any stored configuration value
-        props = load_stored_properties
-        props.each do |k,v|
-          put "DEBUG: Applying constant #{k}=#{v}" if @verbose
-          Kernel.const_set k, v
-        end
-        
-        # Load the application config
-        config_content = File.read config_fn
-        builder = Syrup::Builder.new working_dir, @config_dir, args
-        
-        # Load the fabric
-        if File.file? fabric_fn
-          fabric_file = File.read fabric_fn
-          puts "DEBUG: Applying fabric #{fabric_file}" if @verbose
-        else
-          fabric_file = File.join File.dirname(__FILE__), 'fabrics', 'default.rb'
-          puts "DEBUG: Applying default fabric" if @verbose
-        end
-        builder.instance_eval File.read(fabric_file), fabric_file
-        
-        # Execute the application configuration script
-        builder.instance_eval config_content, config_fn
-        
-        builder
-      end
-      
-      def load_stored_properties
-        current = if File.file? props_fn then YAML.load_file(props_fn) else {} end
-        current ||= {}
+        app
       end
       
       def kill_pids(pids)
@@ -213,79 +247,7 @@ module Syrup
         # Write a newline to clear the '.'s
         STDERR.write "\n"
 
-        puts "WARNING: Process(es) #{waiting_pids.inspect} did not terminate" unless waiting_pids.empty?
-      end
-  end
-  
-  # Builder class used to activate the applications
-  class Builder 
-    attr_reader :pids
-    
-    def self.instance
-      @@instance
-    end
-    
-    def initialize(working_dir, config_dir, args)
-      @working_dir = working_dir
-      @config_dir = config_dir
-      @double_fork = if args[:double_fork].nil? then true else args[:double_fork] end
-      @pids = []
-      
-      # Record the current instance
-      @@instance = self
-    end
-    
-    # Defines an application type that can be declared in a config.sy file.
-    def define_application_type(name, &block)
-      raise "No block provided for application type" unless block_given?
-      
-      # Define a method with the given name in our class
-      metaclass = class << self; self; end
-      metaclass.send(:define_method, name, &block)
-    end
-    
-    def define(&block)
-      raise "No block provided" unless block_given?
-      
-      instance_eval(&block)
-    end
-    
-    private
-      def in_fork(name, &block)
-        pid = fork do
-          if not @double_fork
-            Dir.chdir @working_dir
-            trap("TERM") {exit}
-            yield block
-          else 
-            Process.setsid
-            exit if fork
-            store_pid(name, Process.pid)
-            Dir.chdir @working_dir
-            File.umask 0000
-            STDIN.reopen "/dev/null"
-            STDOUT.reopen "log/#{name}.txt", "a"
-            STDERR.reopen STDOUT
-            trap("TERM") {exit}
-            yield block
-            remove_pid name
-          end
-        end
-        
-        # If we didn't double-fork, then record the PID
-        @pids << pid if not @double_fork 
-      end
-      
-      def store_pid name, pid
-        File.open(pid_fn(name), 'w') {|f| f << pid}
-      end
-      
-      def remove_pid name
-        FileUtils.rm(pid_fn(name))
-      end
-      
-      def pid_fn name
-        File.join @config_dir, "#{name}.pid"
+        @logger.warn "Process(es) #{waiting_pids.inspect} did not terminate" unless waiting_pids.empty?
       end
   end
 end

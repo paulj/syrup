@@ -2,6 +2,7 @@ require 'optparse'
 require 'ostruct'
 require 'syrup/daemon'
 require 'syrup/manager'
+require 'syrup/runner'
 
 module Syrup
   # The main application class for Syrup. Handles parsing of command line arguments, configuration, and
@@ -13,13 +14,20 @@ module Syrup
       
       "#{version[:major]}.#{version[:minor]}.#{version[:patch]}"
     end
+
+    def self.logger
+      @logger ||= Syrup::Logger.new
+    end
     
     def run(arguments)
+      # Get the logger
+      logger = Syrup::Application.logger
+      
       # Configure defaults
       @options = OpenStruct.new
       @options.directory = File.expand_path('~/.syrup')
       @options.verbose = false
-      @options.profile = "default"
+      @options.application = nil
       
       # Parse the options
       @opts = build_options
@@ -30,45 +38,82 @@ module Syrup
       fail "No command given" if command.nil?
       
       # Ensure that the configured directory exists
-      puts "INFO: Configured directory as #{@options.directory}" if @options.verbose
+      logger.info "Configured directory as #{@options.directory}" if @options.verbose
       FileUtils.mkdir_p @options.directory if not File.directory? @options.directory
       
       # Create a manager instance
-      manager = Syrup::Manager.new @options.directory, @options.profile, @options.verbose
+      manager = Syrup::Manager.new @options.directory, logger, @options.verbose
       
       # Handle the command
       daemon = Syrup::Daemon.new @options.directory, manager
       case command
         when 'start'
-          manager.start
+          if command_args.length < 1
+            manager.start_all
+          else
+            command_args.each { |arg| manager.start arg }
+          end
         when 'stop'
-          manager.stop
+          if command_args.length < 1
+            manager.stop_all
+          else
+            manager.stop(command_args)
+          end
         when 'restart'
-          manager.stop
-          manager.start
+          if command_args.length < 1
+            manager.stop_all
+            manager.start_all
+          else
+            command_args.each { |arg| manager.stop arg }
+            command_args.each { |arg| manager.start arg }
+          end
         when 'activate'
-          fail "No path given to activate!" if command_args.length < 1
-          manager.activate command_args[0]
+          fail "No application given to activate a script for!" if command_args.length < 1
+          fail "No path given to activate!" if command_args.length < 2
+          manager.activate command_args[0], command_args[1], command_args.slice(2, command_args.length - 2)
         when 'run'
           # Provide the command line if provided
           if command_args.length < 1
-            manager.run
+            manager.run_all
           else
-            manager.run command_args[0]
+            manager.run command_args
           end
+        # when 'run_app'
+        #   fail('No application name provided') if command_args.length == 0
+        #   manager.run_app command_args[0] #, command_args.slice(1, command_args.length - 1)
         when 'set'
           fail("No properties provided to set") if command_args.length < 1
-          manager.set command_args
+          if @options.application
+            manager.set_app_properties @options.application, command_args
+          else
+            manager.set_global_properties command_args
+          end
         when 'unset'
           fail("No properties provided to unset") if command_args.length < 1
-          manager.unset command_args
+          if @options.application
+            manager.unset_app_properties @options.application, command_args
+          else
+            manager.unset_global_properties command_args
+          end
         when 'clear'
-          manager.clear
+          if @options.application
+            manager.clear_app_properties @options.application
+          else
+            manager.clear_global_properties
+          end
         when 'weave'
           fail("No fabric provided to weave") if command_args.length < 1
-          manager.weave command_args[0]
+          if @options.application
+            manager.weave_for_application @options.application, command_args[0]
+          else
+            manager.weave_global command_args[0]
+          end
         when 'unweave'
-          manager.unweave
+          if @options.application
+            manager.unweave_for_application @options.application
+          else
+            manager.unweave_global
+          end
         else
           fail("Unrecognised command \"#{command}\"")
       end
@@ -76,8 +121,8 @@ module Syrup
     
     def build_options
       opts = OptionParser.new
-      opts.banner = "Usage: syrup [options] start | stop | run <path> | activate <path> | set <prop>=<value> |\n" +
-                    "                       unset <prop> | clear | weave <fabric> | unweave"
+      opts.banner = "Usage: syrup [options] start [name] | stop [name] | run [<path> | name] | activate [name] <path> |\n" +
+                    "                       set <prop>=<value> | unset <prop> | clear | weave <fabric> | unweave"
       opts.separator ""
       opts.separator "Ruby options:"
       opts.on('-d', '--debug', 'set debugging flags (set $DEBUG to true)') { $DEBUG = true }
@@ -96,8 +141,8 @@ module Syrup
       opts.on('--local', "Sets the configuration base path to ./.syrup, allowing for a local configuration") {
         @options.directory = File.expand_path('./.syrup')
       }
-      opts.on('--profile NAME', "Selects the profile that should be updated. Defaults to 'default'") { |value|
-        @options.profile = value
+      opts.on('--application NAME', "Selects the application that should be updated. Defaults to global settings.") { |value|
+        @options.application = value
       }
       opts.on('--verbose', "Places Syrup in verbose mode.") {
         @options.verbose = true
@@ -138,6 +183,21 @@ module Syrup
       puts "ERROR: #{msg}"
       puts @opts
       exit
+    end
+  end
+  
+  class Logger
+    def error(msg)
+      puts "ERROR: #{msg}"
+    end
+    def warn(msg)
+      puts "WARN: #{msg}"
+    end
+    def info(msg)
+      puts "INFO: #{msg}"
+    end
+    def debug(msg)
+      puts "DEBUG: #{msg}"
     end
   end
 

@@ -2,17 +2,17 @@
 
 Gem::Specification.new do |s|
   s.name = %q{syrup}
-  s.version = "0.0.1"
+  s.version = "0.1.0"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Paul Jones"]
-  s.date = %q{2009-03-26}
+  s.date = %q{2009-03-28}
   s.default_executable = %q{syrup}
   s.description = %q{Syrup is a process manager for working with services. It provides the ability to deploy and manage long-running services.}
   s.email = %q{pauljones23@gmail.com}
   s.executables = ["syrup"]
   s.extra_rdoc_files = ["README.rdoc"]
-  s.files = ["Rakefile", "README.rdoc", "VERSION.yml", "bin/syrup", "lib/launcher.rb", "lib/syrup", "lib/syrup/daemon.rb", "lib/syrup/fabrics", "lib/syrup/fabrics/default.rb", "lib/syrup/manager.rb", "lib/syrup.rb", "spec/syrup_spec.rb"]
+  s.files = ["Rakefile", "README.rdoc", "VERSION.yml", "bin/syrup", "lib/launcher.rb", "lib/syrup", "lib/syrup/config_store.rb", "lib/syrup/daemon.rb", "lib/syrup/executor.rb", "lib/syrup/fabrics", "lib/syrup/fabrics/default.rb", "lib/syrup/manager.rb", "lib/syrup/runner.rb", "lib/syrup.rb", "spec/syrup", "spec/syrup/config_store_spec.rb", "spec/syrup/runner_spec.rb", "spec/syrup_spec.rb"]
   s.has_rdoc = true
   s.homepage = %q{http://github.com/vuderacha/syrup/}
   s.rdoc_options = ["--inline-source", "--charset=UTF-8"]

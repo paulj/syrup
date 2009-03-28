@@ -1,3 +1,8 @@
+# Very simple default fabric. Just execute the application!
+Syrup::Runner.run_application
+
+
+
 # Default Fabric that is included in all Syrup applications. If a new Fabric is being written, this
 # file can be included to "inherit" the features it provides.
 
