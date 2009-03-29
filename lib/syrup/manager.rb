@@ -1,5 +1,6 @@
 require 'syrup/config_store'
 require 'yaml'
+require 'fileutils'
 
 module Syrup
   # Manager for controlling the Syrup functionality
@@ -38,10 +39,14 @@ module Syrup
         # Record our PID
         app.pid = Process.pid
         
+        # Calculate the log filename for the application, and make sure the directory exists
+        log_fn = File.join(File.dirname(app.app), 'log', "#{app_name}.log")
+        FileUtils.mkdir_p File.dirname(log_fn)
+        
         #Dir.chdir @working_dir
         File.umask 0000
         STDIN.reopen "/dev/null"
-        STDOUT.reopen "log/#{app_name}.txt", "a"
+        STDOUT.reopen log_fn, "a"
         STDERR.reopen STDOUT
         trap("TERM") {exit}
         
