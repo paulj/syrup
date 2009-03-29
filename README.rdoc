@@ -1,18 +1,28 @@
-= Syrup - Service Management
-Syrup provides mechanism for managing your application daemons. Instead of needing
-to manually background processes (such as queue workers), you just configure
-a config.sy file, and then start and stop it.
+= Syrup - Micro Application Servers
+In the ever growing quest for more maintainable applications, it is often becoming enticing to move
+towards loosely linked micro-applications. Whilst these applications are certainly easier to work with,
+the configuration economies of the single larger application are often lost. In other worlds, application
+servers take on the responsibility of providing common resources to applications. This is where Syrup comes
+in for your micro-applications.
 
-== Getting Started
-Syrup assumes that you'll deploy one application group per user account. You can
-run more if you want to, but Syrup makes it a lot easier if you don't...
+Instead of needing to redefine configuration and setup steps for each of your applications over and over again,
+Syrup lets you write a single common fabric, and then start each application up within this fabric. The fabric
+can take care of connecting to your database, configuring your logs, initializing your messaging queueing, and
+practically any other common activity. Your application can then just worry about being your application.
 
-Firstly, download and install syrup
+== Installation
+Syrup can be installed in one of two ways. Via rubygems, with:
+  gem sources -a http://gems.github.com
+  gem install vuderacha-syrup
+
+Or, if you prefer to live on the edge:
   git clone git://github.com/vuderacha/syrup.git
   cd syrup
-  rake install
+  rake gemspec build install
 
-Assuming you have a simple application such as:
+== A Standalone Service
+If you're just interested in writing a background service, Syrup can make that easy. Assuming you have a simple 
+application such as:
   # test_service.rb
   while true
     File.open('/tmp/test.txt', 'a') {|f| f << "a\n"}
@@ -20,34 +30,100 @@ Assuming you have a simple application such as:
 
 Create a configuration file for Syrup to run it:
   # config.sy
-  service 'myservice', 'test-service.rb'
+  load 'test-service.rb'
 
-For Syrup to use an application, you need to "activate" it. This informs Syrup about the
+For Syrup to run an application, you need to "activate" it. This informs Syrup about the
 path of the application, and allows it to automatically start the app again later when you
 may not be around to tell it about it! Assuming that you've put your app into /home/syruptest/app,
 then you'll just issue the command:
-  syrup activate /home/syruptest/app
+  syrup activate myapp /home/syruptest/app/config.sy
+This will create an application record in /home/syruptest/.syrup/myapp/ containing the details of this
+application.
 
-This will create a file called "activated" in /home/syruptest/.syrup containing the path to this app.
-
-Finally, start the application with:
+Now you can start the application with:
+  syrup start myapp
+And then, when you're done, stop it with:
+  syrup stop myapp
+If you've registered multiple applications, you can start and stop them all at once with:
   syrup start
-
-Conversely, stop it with:
   syrup stop
 
-== Supported Application Types
-Syrup currently supports two types of application. Services are declared in the form
-  service "<name>", "<file>"
+Whilst you're developing applications, running them in the background isn't always the easiest way to work
+with them. Syrup provides the ability to run an application in the foreground with:
+  syrup run myapp
+Applications run this way will run in the foreground, and can be terminated with Ctrl-C. You can even run
+multiple applications by specifying multiple names:
+  syrup run myapp mysecondapp
+Hitting Ctrl-C will terminate all of these applications at once - great for working on a "product" that consists
+of a bunch of applications that you need to control all at once!
 
-Rack applications are also supported. To run a rack application, add the following to your config.sy:
-  rack "<name>", "<rack arguments>"
-Note that if your config.ru doesn't require any arguments, then the second parameter is entirely optional.
+== Creating a Fabric
+Of course, making an application run in the background really isn't all that interesting. Creating a Fabric
+is what will make Syrup seem a whole lot more useful.
+
+Start with creating a simple Fabric. Perhaps you just want to initialize a logging framework. To do that, start
+with a fabric application file:
+  # myfabric.rb
+  require 'rubygems'
+  require 'log4r'
+  
+  # Configure a stdout outputter on a top level logger
+  formatter = Log4r::PatternFormatter.new(:pattern => "[%l] [#%c] %d :: %m")
+  logger = Log4r::Logger.new 'MyApps'
+  logger.outputters = Log4r::StdoutOutputter.new 'console', :formatter => formatter
+
+  # Register that this Fabric provided logging features
+  Syrup.fabric_support.register_feature :logging
+
+  # Inform the actual application that it can start
+  Syrup::Runner.run_application
+
+Now we build an application that sits on tops of this fabric:
+  # config.sy
+  fabric_requirement :logging		# Ensure that the Fabric had logging support
+  load 'myapp.rb'
+
+To get this application running:
+  syrup activate myapp config.sy
+  syrup weave myapp myfabric.rb
+  syrup start myapp
+
+Syrup will start a process, and execute the Fabric. When the Fabric says
+  Syrup::Runner.run_application
+the underlying application will be started.
+
+At this point, you're probably thinking "why don't I just 'require' my Fabric". Well, you could. But what if we
+made the Fabric do something more interesting?
+  # myemfabric.rb
+  require 'rubygems'
+  require 'eventmachine'
+
+  EM.run {
+    # Do something that has to be started within EventMachine
+    EM.defer { puts "Hello World, from the background!" }
+    
+    # Register that this Fabric is providing EventMachine support
+    Syrup.fabric_support.register_feature :logging
+    
+    # Run the application
+    Syrup::Runner.run_application
+  } 
+  
+  # config.sy
+  fabric_requirement :eventmachine
+  load 'myemapp.rb'
+
+  # myemapp.rb
+  EM.defer { puts "Hello World. Again from the background." }
+  
+In this application, we're making the Fabric do something that is a little harder just to require. The Fabric is now
+doing something where the application needs to run "in the middle". Hopefully, it would be easily imaginable that the
+Fabric would be able to startup and teardown various resources around the application running.
 
 == Persistent Configuration
 Often, applications need per deployment configuration. One example is configuring whether a given host is
-production or development. Whilst there are many ways to do this, Syrup adds yet another. Within a given
-account, commands like the following can be issued:
+production or development. Whilst there are many ways to do this, Syrup adds yet another. To add global configuration
+for any application run as the given user, then you can simply state:
   syrup set PROP=VALUE
 This property will be permanently stored (in ~/.syrup/props), and will be applied into the environment of
 all applications loaded through Syrup at their next start. So, for example, if your app had a line that read
@@ -55,3 +131,7 @@ all applications loaded through Syrup at their next start. So, for example, if y
 then executing
   syrup set RACK_ENV=production
 would result in the application reporting "production" upon reaching the aforementioned line.
+
+For applications that need their own individual configuration,
+  syrup --application myapp set RACK_ENV=special
+will result in configuration being added for just your application.
