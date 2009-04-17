@@ -2,11 +2,11 @@
 
 Gem::Specification.new do |s|
   s.name = %q{syrup}
-  s.version = "0.1.1"
+  s.version = "0.1.2"
 
   s.required_rubygems_version = Gem::Requirement.new(">= 0") if s.respond_to? :required_rubygems_version=
   s.authors = ["Paul Jones"]
-  s.date = %q{2009-03-28}
+  s.date = %q{2009-04-17}
   s.default_executable = %q{syrup}
   s.description = %q{Syrup is a process manager for working with services. It provides the ability to deploy and manage long-running services.}
   s.email = %q{pauljones23@gmail.com}
