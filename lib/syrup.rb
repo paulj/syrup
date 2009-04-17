@@ -79,9 +79,9 @@ module Syrup
           else
             manager.run command_args
           end
-        # when 'run_app'
-        #   fail('No application name provided') if command_args.length == 0
-        #   manager.run_app command_args[0] #, command_args.slice(1, command_args.length - 1)
+        when 'debug'
+           fail('No application name provided') if command_args.length == 0
+           manager.run_app command_args[0]
         when 'set'
           fail("No properties provided to set") if command_args.length < 1
           if @options.application
@@ -122,7 +122,7 @@ module Syrup
     
     def build_options
       opts = OptionParser.new
-      opts.banner = "Usage: syrup [options] start [name] | stop [name] | run [<path> | name] | activate [name] <path> |\n" +
+      opts.banner = "Usage: syrup [options] start [name] | stop [name] | run [<path> | name] | debug name | activate [name] <path> |\n" +
                     "                       set <prop>=<value> | unset <prop> | clear | weave <fabric> | unweave"
       opts.separator ""
       opts.separator "Ruby options:"
